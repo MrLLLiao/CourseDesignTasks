@@ -32,7 +32,7 @@ bool ast_add_child(ASTNode* parent, ASTNode* child) {
     if (!parent || !child) return false;
     if (parent->child_count == parent->child_cap) {
         size_t new_cap = (parent->child_cap == 0) ? 4 : (parent->child_cap * 2);
-        ASTNode **new_child = (ASTNode**)realloc(parent->children, new_cap * sizeof(ASTNode));
+        ASTNode **new_child = (ASTNode**)realloc(parent->children, new_cap * sizeof(ASTNode*));
         if (!new_child) return false;
         parent->children = new_child;
         parent->child_cap = new_cap;
