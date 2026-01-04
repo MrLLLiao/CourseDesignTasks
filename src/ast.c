@@ -53,23 +53,23 @@ void ast_free(ASTNode* node) {
 
 const char* ast_kind_name(ASTKind kind) {
     switch (kind) {
-        case AST_PROGRAM: return "PROGRAM";
-        case AST_FUNCTION: return "FUNCTION";
-        case AST_BLOCK: return "BLOCK";
-        case AST_IF: return "IF";
-        case AST_FOR: return "FOR";
-        case AST_WHILE: return "WHILE";
-        case AST_DO_WHILE: return "DO_WHILE";
-        case AST_SWITCH: return "SWITCH";
-        case AST_CASE: return "CASE";
-        case AST_DEFAULT: return "DEFAULT";
-        case AST_RETURN: return "RETURN";
-        case AST_BREAK: return "BREAK";
-        case AST_CONTINUE: return "CONTINUE";
-        case AST_STMT: return "STMT";
-        case AST_EXPR: return "EXPR";
-        case AST_TOKEN: return "TOKEN";
-        default: return "UNKNOWN";
+        case AST_PROGRAM:   return "PROGRAM";
+        case AST_FUNCTION:  return "FUNCTION";
+        case AST_BLOCK:     return "BLOCK";
+        case AST_IF:        return "IF";
+        case AST_FOR:       return "FOR";
+        case AST_WHILE:     return "WHILE";
+        case AST_DO_WHILE:  return "DO_WHILE";
+        case AST_SWITCH:    return "SWITCH";
+        case AST_CASE:      return "CASE";
+        case AST_DEFAULT:   return "DEFAULT";
+        case AST_RETURN:    return "RETURN";
+        case AST_BREAK:     return "BREAK";
+        case AST_CONTINUE:  return "CONTINUE";
+        case AST_STMT:      return "STMT";
+        case AST_EXPR:      return "EXPR";
+        case AST_TOKEN:     return "TOKEN";
+        default:            return "UNKNOWN";
     }
 }
 
