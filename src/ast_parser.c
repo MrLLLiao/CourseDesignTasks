@@ -8,8 +8,8 @@ typedef struct {
     size_t pos;
 } Parser;
 
-static Token* peek(Parser* p, size_t off) {
-    size_t i = p->pos + off;
+static Token* peek(Parser* p, size_t offset) {
+    size_t i = p->pos + offset;
     if (i >= p->ntoks) return NULL;
     return p->toks[i];
 }
