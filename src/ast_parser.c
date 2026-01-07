@@ -70,18 +70,18 @@ static int is_op(Token *t, const char* s) { return t && t->type == TK_OPERATOR &
  */
 static const char* kw_label(KeywordKind kw) {
     switch (kw) {
-        case KW_IF: return "IF";
-        case KW_ELSE: return "ELSE";
-        case KW_FOR: return "FOR";
-        case KW_WHILE: return "WHILE";
-        case KW_DO: return "DO";
-        case KW_SWITCH: return "SWITCH";
-        case KW_CASE: return "CASE";
-        case KW_DEFAULT: return "DEFAULT";
-        case KW_BREAK: return "BREAK";
-        case KW_CONTINUE: return "CONTINUE";
-        case KW_RETURN: return "RETURN";
-        default: return "KW";
+        case KW_IF:         return "IF";
+        case KW_ELSE:       return "ELSE";
+        case KW_FOR:        return "FOR";
+        case KW_WHILE:      return "WHILE";
+        case KW_DO:         return "DO";
+        case KW_SWITCH:     return "SWITCH";
+        case KW_CASE:       return "CASE";
+        case KW_DEFAULT:    return "DEFAULT";
+        case KW_BREAK:      return "BREAK";
+        case KW_CONTINUE:   return "CONTINUE";
+        case KW_RETURN:     return "RETURN";
+        default:            return "KW";
     }
 }
 
