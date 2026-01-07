@@ -1,3 +1,10 @@
+/**
+* @file ast_parser.c
+ * @brief 将 Token 序列解析为“查重友好”的简化 AST。
+ *
+ * 目标是保留控制结构/函数/块等结构信息，提升对空白、换行等文本变形的鲁棒性。
+ * 该解析器并不追求完整覆盖 C 语法，而是面向课程设计的相似度检测场景做取舍。
+ */
 #include "../include/ast_parser.h"
 #include <string.h>
 #include <stdlib.h>
@@ -8,26 +15,59 @@ typedef struct {
     size_t pos;
 } Parser;
 
+/**
+ * @brief 向前查看 offset 个 token（不移动指针）。
+ *
+ * @param p      解析器状态。
+ * @param offset 偏移量（0 表示当前 token）。
+ * @return token 指针；越界返回 NULL。
+ */
 static Token* peek(Parser* p, size_t offset) {
     size_t i = p->pos + offset;
     if (i >= p->ntoks) return NULL;
     return p->toks[i];
 }
 
+/**
+ * @brief 获取当前 token（peek(p,0) 的便捷封装）。
+ */
 static Token* cur(Parser* p) { return peek(p, 0); }
 
+/**
+ * @brief 判断 token 是否为 EOF（或 NULL）。
+ */
 static int is_eof(Token* t) { return t == NULL || t->type == TOKEN_EOF; }
 
+/**
+ * @brief 读取并消费一个 token（将 pos 前移）。
+ *
+ * @param p 解析器状态。
+ * @return 被消费的 token；若已到 EOF 则返回当前/NULL。
+ */
 static Token* consume(Parser* p) {
     Token* t = cur(p);
     if (!is_eof(t)) p->pos ++;
     return t;
 }
 
+/**
+ * @brief 判断当前 token 是否为指定关键字。
+ */
 static int is_kw(Token* t, KeywordKind kw) { return t && t->type == TK_KEYWORD && t->kw == kw; }
+/**
+ * @brief 判断当前 token 是否为指定标点（分隔符），如 "(", "{", ";" 等。
+ */
 static int is_punc(Token* t, const char* s) { return t && t->type == TK_PUNCTUATION && t->lex && strcmp(t->lex, s) == 0; }
+/**
+ * @brief 判断当前 token 是否为指定运算符，如 "+", "==" 等。
+ */
 static int is_op(Token *t, const char* s) { return t && t->type == TK_OPERATOR && strcmp(t->lex, s) == 0; }
 
+/**
+ * @brief 将关键字枚举映射为稳定的标签字符串（用于 AST_TOKEN 叶子）。
+ *
+ * 目的：让“语义相同但书写不同”的代码（如不同空格/换行）在序列化后更稳定。
+ */
 static const char* kw_label(KeywordKind kw) {
     switch (kw) {
         case KW_IF: return "IF";
@@ -45,6 +85,15 @@ static const char* kw_label(KeywordKind kw) {
     }
 }
 
+/**
+ * @brief 将 Token 归一化为用于 AST 叶子节点的“标签”。
+ *
+ * 策略：
+ * - 关键字：用关键字标签（IF/FOR/RETURN...）；
+ * - 标识符：保留 lex（由其他模块可先做变量名归一化）；
+ * - 常量：统一为 NUM/STR/CHR；
+ * - 运算符与分隔符：直接用其字面量。
+ */
 static const char* token_label(Token* t) {
     if (!t) return "NULL";
     if (t->type == TK_KEYWORD) return kw_label(t->kw);
@@ -56,10 +105,22 @@ static const char* token_label(Token* t) {
     return "TOK";
 }
 
+/**
+ * @brief 将一个 Token 包装成 AST_TOKEN 叶子节点。
+ */
 static ASTNode* leaf_from_token(Token* t) { return ast_new(AST_TOKEN, token_label(t)); }
 static ASTNode* parse_statement(Parser* p);
 static ASTNode* parse_block(Parser* p);
 
+/**
+ * @brief 解析括号表达式 "( ... )" 为 AST_EXPR。
+ *
+ * 实现说明：
+ * - 不做完整表达式语法树（为查重任务保留结构/符号即可）；
+ * - 通过 depth 计数处理嵌套括号，直到匹配到最外层 ')'.
+ *
+ * @return 成功返回 AST_EXPR；失败返回 NULL。
+ */
 static ASTNode* parse_paren_expr(Parser* p) {
     // (...) -> child of expr
     if (!is_punc(cur(p), "(")) return NULL;
@@ -89,6 +150,17 @@ static ASTNode* parse_paren_expr(Parser* p) {
     return expr;
 }
 
+/**
+ * @brief 解析一段“以分号结束的语句片段”或在遇到 '{' / '}' 时提前停止。
+ *
+ * 该函数用于：
+ * - 普通语句（AST_STMT）：一直收集 token 直到 ';'；
+ * - return 表达式（AST_EXPR）：return 后面的表达式片段。
+ *
+ * 细节：
+ * - par/brk 计数用于忽略括号/中括号内部的 ';'；
+ * - 在 block 边界 '{' 或 '}' 处停止，避免跨语句吞噬。
+ */
 static ASTNode* parse_until_semicolon(Parser* p, ASTKind kind) {
     ASTNode* st = ast_new(kind, NULL);
     if (!st) return NULL;
@@ -125,6 +197,9 @@ static ASTNode* parse_until_semicolon(Parser* p, ASTKind kind) {
     return st;
 }
 
+/**
+ * @brief 解析 if 语句：IF + 条件括号 + then 语句 + 可选 else 分支。
+ */
 static ASTNode* parse_if(Parser *p) {
     consume(p);
     ASTNode* n = ast_new(AST_IF, NULL);
@@ -147,6 +222,9 @@ static ASTNode* parse_if(Parser *p) {
     return n;
 }
 
+/**
+ * @brief 解析 for 语句：FOR + 头部括号 + 循环体语句。
+ */
 static ASTNode* parse_for(Parser *p) {
     consume(p);
     ASTNode* n = ast_new(AST_FOR, NULL);
@@ -160,6 +238,9 @@ static ASTNode* parse_for(Parser *p) {
     return n;
 }
 
+/**
+ * @brief 解析 while 语句：WHILE + 条件括号 + 循环体语句。
+ */
 static ASTNode* parse_while(Parser *p) {
     consume(p);
     ASTNode* n = ast_new(AST_WHILE, NULL);
@@ -173,6 +254,9 @@ static ASTNode* parse_while(Parser *p) {
     return n;
 }
 
+/**
+ * @brief 解析 do-while 语句：DO + 循环体语句 + WHILE(条件) + ';'。
+ */
 static ASTNode* parse_do_while(Parser* p) {
     consume(p);
     ASTNode* n = ast_new(AST_DO_WHILE, NULL);
@@ -190,6 +274,9 @@ static ASTNode* parse_do_while(Parser* p) {
     return n;
 }
 
+/**
+ * @brief 解析 switch 语句：SWITCH + 条件括号 + 语句体（通常是 block）。
+ */
 static ASTNode* parse_switch(Parser *p) {
     consume(p);
     ASTNode* n = ast_new(AST_SWITCH, NULL);
@@ -203,6 +290,13 @@ static ASTNode* parse_switch(Parser *p) {
     return n;
 }
 
+/**
+ * @brief 解析 case 分支：CASE + 表达式 + ':' + 分支体语句序列。
+ *
+ * 解析策略：
+ * - ':' 之前收集为 AST_EXPR；
+ * - ':' 之后直到遇到下一个 case/default 或 '}' 为止，作为 CASE BODY。
+ */
 static ASTNode* parse_case(Parser *p) {
     consume(p);
     ASTNode* n = ast_new(AST_CASE, NULL);
@@ -235,6 +329,9 @@ static ASTNode* parse_case(Parser *p) {
     return n;
 }
 
+/**
+ * @brief 解析 default 分支：DEFAULT + ':' + 分支体语句序列。
+ */
 static ASTNode* parse_default(Parser *p) {
     consume(p);
     ASTNode* n = ast_new(AST_DEFAULT, NULL);
@@ -253,6 +350,9 @@ static ASTNode* parse_default(Parser *p) {
     return n;
 }
 
+/**
+ * @brief 解析 return：RETURN + 可选表达式片段（直到 ';'）。
+ */
 static ASTNode* parse_return(Parser *p) {
     consume(p);
     ASTNode* n = ast_new(AST_RETURN, NULL);
@@ -263,6 +363,9 @@ static ASTNode* parse_return(Parser *p) {
     return n;
 }
 
+/**
+ * @brief 解析 break 语句（可选消费 ';'）。
+ */
 static ASTNode* parse_break(Parser* p) {
     consume(p);
     ASTNode* n = ast_new(AST_BREAK, NULL);
@@ -270,6 +373,9 @@ static ASTNode* parse_break(Parser* p) {
     return n;
 }
 
+/**
+ * @brief 解析 continue 语句（可选消费 ';'）。
+ */
 static ASTNode* parse_continue(Parser* p) {
     consume(p);
     ASTNode* n = ast_new(AST_CONTINUE, NULL);
@@ -277,6 +383,9 @@ static ASTNode* parse_continue(Parser* p) {
     return n;
 }
 
+/**
+ * @brief 解析代码块 "{ ... }" 为 AST_BLOCK，内部递归解析若干 statement。
+ */
 static ASTNode* parse_block(Parser *p) {
     if (!is_punc(cur(p), "{")) return NULL;
     consume(p); // '{'
@@ -294,7 +403,14 @@ static ASTNode* parse_block(Parser *p) {
     return b;
 }
 
-
+/**
+ * @brief 解析一条语句（statement）的入口分发器。
+ *
+ * 优先级：
+ * - '{' -> block；
+ * - 关键字控制结构（if/for/while/do/switch/case/default/return/break/continue）；
+ * - 其他情况 -> 普通语句（直到 ';'）。
+ */
 static ASTNode* parse_statement(Parser* p) {
     Token* t = cur(p);
     if (is_eof(t)) return NULL;
@@ -315,6 +431,16 @@ static ASTNode* parse_statement(Parser* p) {
     return parse_until_semicolon(p, AST_STMT);
 }
 
+/**
+ * @brief 启发式判断当前位置是否像“函数定义”。
+ *
+ * 判定思路：
+ * - 向前扫描：必须看到匹配的一对 '(' 与 ')'；
+ * - 在最外层括号之后，遇到 '{' 才认为是函数（而不是声明/表达式）；
+ * - 若在最外层括号前先遇到 ';'，则排除（更像语句/声明结束）。
+ *
+ * @return 像函数返回 1，否则 0。
+ */
 static int looks_like_function(Parser* p) {
     size_t i = p->pos;
     int par = 0;
@@ -337,6 +463,12 @@ static int looks_like_function(Parser* p) {
     return 0;
 }
 
+/**
+ * @brief 解析函数定义：函数头（直到 '{'）+ 函数体 block。
+ *
+ * 为查重任务保留“函数这个结构节点”，但不细分返回类型/参数等语义；
+ * 头部 token 统一收集到一个 AST_STMT("FUNC_HEADER") 子节点中。
+ */
 static ASTNode* parse_function(Parser *p) {
     ASTNode* fn = ast_new(AST_FUNCTION, NULL);
     if (!fn) return NULL;
@@ -361,6 +493,18 @@ static ASTNode* parse_function(Parser *p) {
     return fn;
 }
 
+/**
+ * @brief 解析 token 序列为 AST 根节点（AST_PROGRAM）。
+ *
+ * 设计目标：为“代码相似度检测”提供结构化表示，而不是完整 C 语法。
+ * 因此：
+ * - 只对控制结构、函数、块做显式树节点；
+ * - 其余部分以 token 叶子序列保留（对变量名归一化等更鲁棒）。
+ *
+ * @param toks  token 指针数组（每个元素为 Token*）。
+ * @param ntoks token 数量（包含 EOF）。
+ * @return AST 根节点；失败返回 NULL。
+ */
 ASTNode* ast_parse_tokens(Token* const* toks, size_t ntoks) {
     Parser p = { toks, ntoks, 0 };
 
