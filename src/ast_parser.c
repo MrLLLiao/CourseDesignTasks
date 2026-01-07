@@ -95,13 +95,13 @@ static const char* kw_label(KeywordKind kw) {
  * - 运算符与分隔符：直接用其字面量。
  */
 static const char* token_label(Token* t) {
-    if (!t) return "NULL";
-    if (t->type == TK_KEYWORD) return kw_label(t->kw);
-    if (t->type == TK_IDENT) return t->lex ? t->lex : "ID";
-    if (t->type == TK_NUMBER) return "NUM";
-    if (t->type == TK_STRING) return "STR";
-    if (t->type == TK_CHAR) return "CHR";
-    if ((t->type == TK_OPERATOR || t->type == TK_PUNCTUATION) && t->lex) return t->lex;
+    if (!t)                                                                 return "NULL";
+    if (t->type == TK_KEYWORD)                                              return kw_label(t->kw);
+    if (t->type == TK_IDENT)                                                return t->lex ? t->lex : "ID";
+    if (t->type == TK_NUMBER)                                               return "NUM";
+    if (t->type == TK_STRING)                                               return "STR";
+    if (t->type == TK_CHAR)                                                 return "CHR";
+    if ((t->type == TK_OPERATOR || t->type == TK_PUNCTUATION) && t->lex)    return t->lex;
     return "TOK";
 }
 
