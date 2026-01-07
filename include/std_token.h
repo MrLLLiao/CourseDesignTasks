@@ -1,3 +1,8 @@
+/**
+* @file std_token.h
+ * @brief 小组共享的 Token 定义（供 AST 解析模块使用）。
+ */
+
 #pragma once
 
 #ifndef COURSEDESIGNTASKS_STD_TOKEN_H
