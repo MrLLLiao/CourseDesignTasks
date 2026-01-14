@@ -45,6 +45,9 @@ add_executable(final_app
         src/main.c
 )
 
+add_executable(generator
+        codes/generator.c
+)
 # 链接所有需要的库
 target_link_libraries(final_app PRIVATE
         core          # AST、序列化、编辑距离
