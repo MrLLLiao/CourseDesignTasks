@@ -5,7 +5,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h> // 用于进度条计算
 
 // ========== 引入项目模块 ==========
 #include "ast.h"
@@ -39,8 +38,8 @@
 
 /**
  * 打印带颜色的进度条
- * @param percent 百分比 (0-100)
  * @param label 当前操作描述
+ * @param state 输出状态
  */
 void print_step(const char* label, int state) {
     // 清除当前行 (防止残留字符)
@@ -236,6 +235,55 @@ void print_sim_bar(double similarity) {
     printf("]      ║\n");
 }
 
+// ========== 新增：UI 辅助函数 ==========
+
+/**
+ * 计算字符串在终端显示的视觉宽度
+ * (ASCII算1，中文字符算2)
+ */
+int get_visual_width(const char* str) {
+    int width = 0;
+    int i = 0;
+    while (str[i]) {
+        unsigned char c = (unsigned char)str[i];
+        if (c < 128) {
+            width += 1; // ASCII
+            i++;
+        } else {
+            // UTF-8 多字节字符 (通常中文字符占3字节，显示宽2格)
+            // 简单的跳过后续字节逻辑
+            width += 2;
+            // 跳过 UTF-8 后续字节
+            i++;
+            while ((str[i] & 0xC0) == 0x80) i++;
+        }
+    }
+    return width;
+}
+
+/**
+ * 打印重复的字符
+ */
+void print_repeat(const char* ch, int count) {
+    for (int i = 0; i < count; i++) printf("%s", ch);
+}
+
+/**
+ * 打印居中文字行
+ */
+void print_centered_row(const char* text, int box_width, const char* border) {
+    int text_w = get_visual_width(text);
+    int padding = box_width - text_w;
+    int pad_left = padding / 2;
+    int pad_right = padding - pad_left;
+
+    printf("%s", border);
+    print_repeat(" ", pad_left);
+    printf("%s", text);
+    print_repeat(" ", pad_right);
+    printf("%s\n", border);
+}
+
 /**
  * 比较两个代码文件的相似度
  */
@@ -243,12 +291,8 @@ void compare_files(const char* file1, const char* file2) {
     // 1. Banner
     system("cls"); // 清屏
     printf(CYAN BOLD "\n╔════════════════════════════════════════════════════════════╗\n");
-    printf("║             " ICON_CODE " 代码结构相似度检测系统 v2.0         ║\n");
+    printf("║             " ICON_CODE " 代码结构相似度检测系统 v3.0         ║\n");
     printf("╚════════════════════════════════════════════════════════════╝\n" RESET);
-
-    // 2. 读取文件
-    printf("\n" BOLD MAGENTA "Step 1: 读取源文件" RESET "\n");
-    print_separator();
 
     char* source1 = read_file(file1);
     char* source2 = read_file(file2);
@@ -258,20 +302,10 @@ void compare_files(const char* file1, const char* file2) {
         if(source2) free(source2);
         return;
     }
-    printf("  " GREEN ICON_CHECK " 文件读取成功" RESET "\n");
-    printf("  " ICON_FILE " 文件 A: %-20s " CYAN "(%zu bytes)" RESET "\n", file1, strlen(source1));
-    printf("  " ICON_FILE " 文件 B: %-20s " CYAN "(%zu bytes)" RESET "\n", file2, strlen(source2));
 
-    // 3. 处理文件
-    printf("\n" BOLD MAGENTA "Step 2: 结构分析 & 特征提取" RESET "\n");
-    print_separator();
-
+    // 2. 处理代码 (process_code 内部已含步骤打印)
     StrVec seq1, seq2;
     int success1 = process_code(file1, source1, &seq1);
-
-    // 简单的视觉间隔
-    // for(int i=0; i<100000000; i++);
-
     int success2 = process_code(file2, source2, &seq2);
 
     free(source1);
@@ -283,45 +317,106 @@ void compare_files(const char* file1, const char* file2) {
         return;
     }
 
-    // 4. 计算相似度
-    printf("\n" BOLD MAGENTA "Step 3: 计算编辑距离 (Levenshtein)" RESET "\n");
-    print_separator();
-    printf("  " ICON_ARROW " 正在比对特征序列...\n");
-
+    // 3. 计算相似度
     size_t distance = levenshtein_strvec(&seq1, &seq2);
     double similarity = similarity_from_dist(distance, seq1.size, seq2.size);
 
-    // 5. 结果面板
-    printf("\n");
-    printf(WHITE "╔════════════════════════════════════════════════════════════╗\n");
-    printf("║                   " ICON_STAR "  相似度分析报告  " ICON_STAR "                   ║\n");
-    printf("╠════════════════════════════════════════════════════════════╣\n" RESET);
-    printf("║  文件 A: %-41s ║\n", file1);
-    printf("║  文件 B: %-41s ║\n", file2);
-    printf(WHITE "╠════════════════════════════════════════════════════════════╣\n" RESET);
+    // ================= UI 动态绘制逻辑 =================
 
-    // 根据相似度变色
+    // 1. 计算所需的最大宽度
+    // 基础宽度 60，如果有更长的文件路径，则扩展宽度
+    int min_width = 60;
+    int content_width_1 = get_visual_width(file1) + 12; // "文件 A: " + 路径
+    int content_width_2 = get_visual_width(file2) + 12; // "文件 B: " + 路径
+
+    int box_width = min_width;
+    if (content_width_1 > box_width) box_width = content_width_1 + 4; // +4 留一点余量
+    if (content_width_2 > box_width) box_width = content_width_2 + 4;
+
+    // 准备颜色和判定词
     char color_code[10];
-    if (similarity >= 0.9) strcpy(color_code, RED BOLD);
-    else if (similarity >= 0.6) strcpy(color_code, YELLOW BOLD);
-    else strcpy(color_code, GREEN BOLD);
-
-    printf("║  结构相似度: %s%6.2f%%%s                                   ║\n", color_code, similarity * 100, RESET);
-    print_sim_bar(similarity);
-
-    printf(WHITE "╠════════════════════════════════════════════════════════════╣\n" RESET);
+    char result_text[64];
 
     if (similarity >= 0.9) {
-        printf("║  判定: " RED BOLD "【高度相似】" RESET " 极大可能存在抄袭                  ║\n");
+        strcpy(color_code, RED BOLD);
+        sprintf(result_text, "【高度相似】 极大可能存在抄袭");
     } else if (similarity >= 0.6) {
-        printf("║  判定: " YELLOW BOLD "【中度相似】" RESET " 建议人工审查逻辑                  ║\n");
+        strcpy(color_code, YELLOW BOLD);
+        sprintf(result_text, "【中度相似】 建议人工审查逻辑");
     } else if (similarity >= 0.3) {
-        printf("║  判定: " CYAN BOLD "【低度相似】" RESET " 仅部分语法结构雷同                ║\n");
+        strcpy(color_code, CYAN BOLD);
+        sprintf(result_text, "【低度相似】 仅部分语法结构雷同");
     } else {
-        printf("║  判定: " GREEN BOLD "【不相似】  " RESET " 代码结构差异显著                  ║\n");
+        strcpy(color_code, GREEN BOLD);
+        sprintf(result_text, "【不相似】   代码结构差异显著");
     }
 
-    printf(WHITE "╚════════════════════════════════════════════════════════════╝\n" RESET);
+    printf("\n");
+
+    // --- 顶部边框 ---
+    printf(WHITE "╔");
+    print_repeat("═", box_width);
+    printf("╗\n");
+
+    // --- 标题 ---
+    print_centered_row("相似度分析报告", box_width, "║");
+
+    // --- 分隔线 ---
+    printf("╠");
+    print_repeat("═", box_width);
+    printf("╣\n" RESET);
+
+    // --- 文件路径 (左对齐，动态计算右侧空格) ---
+    // 宏定义用于简化打印逻辑
+    #define PRINT_FILE_ROW(label, f_name) do { \
+        printf(WHITE "║" RESET "  %s %s", label, f_name); \
+        int _w = get_visual_width(label) + get_visual_width(f_name) + 2; \
+        print_repeat(" ", box_width - _w); \
+        printf(WHITE "║\n" RESET); \
+    } while(0)
+
+    PRINT_FILE_ROW("文件 A:", file1);
+    PRINT_FILE_ROW("文件 B:", file2);
+
+    // --- 分隔线 ---
+    printf(WHITE "╠");
+    print_repeat("═", box_width);
+    printf("╣\n" RESET);
+
+    // --- 相似度数值 ---
+    printf(WHITE "║" RESET "  结构相似度: %s%6.2f%%%s", color_code, similarity * 100, RESET);
+    int sim_text_w = 14 + 7; // "结构相似度: " + "xx.xx%"
+    print_repeat(" ", box_width - sim_text_w - 2);
+    printf(WHITE "║\n" RESET);
+
+    // --- 可视化条 (自适应宽度) ---
+    int bar_max_len = box_width - 16; // 减去 "  可视化: []  " 的长度
+    int bar_fill = (int)(similarity * bar_max_len);
+
+    printf(WHITE "║" RESET "  可视化: [");
+    // 打印实心部分
+    printf("%s", color_code); // 应用颜色
+    for(int i=0; i<bar_max_len; i++) {
+        if (i < bar_fill) printf("█");
+        else printf(RESET WHITE "░"); // 未填充部分
+    }
+    printf(RESET "]  " WHITE "║\n" RESET);
+
+    // --- 分隔线 ---
+    printf(WHITE "╠");
+    print_repeat("═", box_width);
+    printf("╣\n" RESET);
+
+    // --- 判定结果 (左对齐) ---
+    printf(WHITE "║" RESET "  判定: %s%s%s", color_code, result_text, RESET);
+    int res_w = 8 + get_visual_width(result_text); // "  判定: " + 文字
+    print_repeat(" ", box_width - res_w - 2); // -2 是因为前面有两个空格
+    printf(WHITE "║\n" RESET);
+
+    // --- 底部边框 ---
+    printf(WHITE "╚");
+    print_repeat("═", box_width);
+    printf("╝\n" RESET);
     printf("\n");
 
     // 清理
