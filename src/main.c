@@ -1,52 +1,88 @@
 /**
- * ´úÂëÏàËÆ¶È¼ì²âÏµÍ³ - Ö÷³ÌĞò
- *
- * ¹¦ÄÜÁ÷³Ì£º
- * 1. ¶ÁÈ¡Á½¸öCÔ´´úÂëÎÄ¼ş
- * 2. ´Ê·¨·ÖÎö£º½«´úÂë×ª»»ÎªTokenĞòÁĞ
- * 3. Óï·¨·ÖÎö£º½«TokenĞòÁĞ¹¹½¨ÎªAST£¨³éÏóÓï·¨Ê÷£©
- * 4. ASTĞòÁĞ»¯£º½«Ê÷½á¹¹×ª»»ÎªÏßĞÔ×Ö·û´®ĞòÁĞ
- * 5. ÏàËÆ¶È¼ÆËã£ºÊ¹ÓÃ±à¼­¾àÀëËã·¨±È½ÏÁ½¸öĞòÁĞ
- * 6. Êä³ö½á¹û£ºÏÔÊ¾ÏàËÆ¶È°Ù·Ö±È
+ * ä»£ç ç›¸ä¼¼åº¦æ£€æµ‹ç³»ç»Ÿ - ä¸»ç¨‹åº (UIç¾åŒ–ç‰ˆ)
  */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h> // ç”¨äºè¿›åº¦æ¡è®¡ç®—
 
-// ========== ÒıÈëÏîÄ¿Ä£¿é ==========
-#include "ast.h"              // AST½Úµã¶¨Òå
-#include "ast_parser.h"       // Token ¡ú AST
-#include "ast_serial.h"       // AST ¡ú ×Ö·û´®ĞòÁĞ
-#include "edit_distance.c.h"  // ±à¼­¾àÀë¼ÆËã
+// ========== å¼•å…¥é¡¹ç›®æ¨¡å— ==========
+#include "ast.h"
+#include "ast_parser.h"
+#include "ast_serial.h"
+#include "edit_distance.c.h"
+#include "tokenizer.h"
+#include "std_token.h"
 
-// ÒıÈë Tokenizer Ä£¿é£¨ÔÚÉÏ²ãÄ¿Â¼£©
-#include "tokenizer.h"        // ´Ê·¨·ÖÎöÆ÷
-#include "std_token.h"        // Token ¶¨Òå
+// ========== UI ç¾åŒ–å®å®šä¹‰ ==========
+// ANSI é¢œè‰²ä»£ç 
+#define RESET   "\033[0m"
+#define RED     "\033[31m"
+#define GREEN   "\033[32m"
+#define YELLOW  "\033[33m"
+#define BLUE    "\033[34m"
+#define MAGENTA "\033[35m"
+#define CYAN    "\033[36m"
+#define BOLD    "\033[1m"
+#define WHITE   "\033[37m"
 
-// ========== ¹¤¾ßº¯Êı ==========
+// å›¾æ ‡ (éœ€ç»ˆç«¯æ”¯æŒUTF-8)
+#define ICON_CHECK   "âœ”"
+#define ICON_CROSS   "âœ–"
+#define ICON_ARROW   "â¤"
+#define ICON_STAR    "â˜…"
+#define ICON_FILE    "ğŸ“„"
+#define ICON_CODE    "ğŸ’»"
+
+// ========== å·¥å…·å‡½æ•° ==========
 
 /**
- * ¶ÁÈ¡ÎÄ¼şÄÚÈİµ½×Ö·û´®
- * @param filename ÎÄ¼şÂ·¾¶
- * @return ÎÄ¼şÄÚÈİ×Ö·û´®£¨ĞèÒªµ÷ÓÃÕßÊÍ·Å£©£¬Ê§°Ü·µ»ØNULL
+ * æ‰“å°å¸¦é¢œè‰²çš„è¿›åº¦æ¡
+ * @param percent ç™¾åˆ†æ¯” (0-100)
+ * @param label å½“å‰æ“ä½œæè¿°
+ */
+void print_step(const char* label, int state) {
+    // æ¸…é™¤å½“å‰è¡Œ (é˜²æ­¢æ®‹ç•™å­—ç¬¦)
+    printf("\r                                                           \r");
+
+    if (state == 0) {
+        // è¿›è¡Œä¸­ï¼šæ˜¾ç¤ºç®­å¤´å’Œæ–‡æœ¬
+        printf("  " BLUE ICON_ARROW " %s..." RESET, label);
+        fflush(stdout); // å¼ºåˆ¶åˆ·æ–°ç¼“å†²åŒºï¼Œç¡®ä¿æ–‡å­—ç«‹å³æ˜¾ç¤º
+    } else if (state == 1) {
+        // å®Œæˆï¼šæ˜¾ç¤ºå¯¹å·
+        printf("  " GREEN ICON_CHECK " %-16s" RESET " " GREEN "OK" RESET "\n", label);
+    } else {
+        // å¤±è´¥ï¼šæ˜¾ç¤ºå‰å·
+        printf("  " RED ICON_CROSS " %-16s" RESET " " RED "FAILED" RESET "\n", label);
+    }
+}
+
+/**
+ * æ‰“å°åˆ†å‰²çº¿
+ */
+void print_separator() {
+    printf(BLUE "  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€\n" RESET);
+}
+
+/**
+ * è¯»å–æ–‡ä»¶å†…å®¹åˆ°å­—ç¬¦ä¸²
  */
 char* read_file(const char* filename) {
     FILE* fp = fopen(filename, "r");
     if (!fp) {
-        fprintf(stderr, "[´íÎó] ÎŞ·¨´ò¿ªÎÄ¼ş: %s\n", filename);
+        printf("  " RED ICON_CROSS " [é”™è¯¯] æ— æ³•æ‰“å¼€æ–‡ä»¶: %s" RESET "\n", filename);
         return NULL;
     }
 
-    // »ñÈ¡ÎÄ¼ş´óĞ¡
     fseek(fp, 0, SEEK_END);
     long size = ftell(fp);
     fseek(fp, 0, SEEK_SET);
 
-    // ·ÖÅäÄÚ´æ²¢¶ÁÈ¡
     char* content = (char*)malloc(size + 1);
     if (!content) {
-        fprintf(stderr, "[´íÎó] ÄÚ´æ·ÖÅäÊ§°Ü\n");
+        printf("  " RED ICON_CROSS " [é”™è¯¯] å†…å­˜åˆ†é…å¤±è´¥" RESET "\n");
         fclose(fp);
         return NULL;
     }
@@ -59,42 +95,38 @@ char* read_file(const char* filename) {
 }
 
 /**
- * ½«Ô´´úÂë×ª»»ÎªTokenÊı×é
- * @param source Ô´´úÂë×Ö·û´®
- * @param token_count Êä³ö²ÎÊı£ºTokenÊıÁ¿
- * @return TokenÖ¸ÕëÊı×é£¨ĞèÒªµ÷ÓÃÕßÊÍ·Å£©
+ * å°†æºä»£ç è½¬æ¢ä¸ºTokenæ•°ç»„
+ */
+/**
+ * å°†æºä»£ç è½¬æ¢ä¸ºTokenæ•°ç»„ (ä¿®å¤äº†å†…å­˜æ³„éœ²éšæ‚£)
  */
 Token** tokenize_code(const char* source, size_t* token_count) {
-    printf("  [²½Öè1] ´Ê·¨·ÖÎöÖĞ...\n");
-
     Tokenizer tk;
     tokenizer_init(&tk, source);
 
-    // ¶¯Ì¬Êı×é´æ´¢Token
     size_t capacity = 1024;
     size_t count = 0;
     Token** tokens = (Token**)malloc(capacity * sizeof(Token*));
 
-    if (!tokens) {
-        fprintf(stderr, "[´íÎó] TokenÊı×éÄÚ´æ·ÖÅäÊ§°Ü\n");
-        return NULL;
-    }
+    if (!tokens) return NULL;
 
-    // Öğ¸ö¶ÁÈ¡Token
     while (!tokenizer_is_eof(&tk)) {
         Token* tok = tokenizer_next_token(&tk);
 
+        // å¤„ç† tokenizer è¿”å› NULL æˆ– EOF çš„æƒ…å†µ
         if (!tok || tok->type == TOKEN_EOF) {
             if (tok) token_free(tok);
             break;
         }
 
-        // À©Èİ
+        // æ‰©å®¹æ£€æŸ¥
         if (count >= capacity) {
-            capacity *= 2;
-            Token** new_tokens = (Token**)realloc(tokens, capacity * sizeof(Token*));
+            size_t new_capacity = capacity * 2;
+            Token** new_tokens = (Token**)realloc(tokens, new_capacity * sizeof(Token*));
+
             if (!new_tokens) {
-                fprintf(stderr, "[´íÎó] TokenÊı×éÀ©ÈİÊ§°Ü\n");
+                // [ä¿®å¤] æ‰©å®¹å¤±è´¥æ—¶ï¼Œå¿…é¡»é‡Šæ”¾æ‰€æœ‰å·²åˆ†é…çš„ Token å’Œæ•°ç»„æœ¬èº«
+                fprintf(stderr, RED "  [é”™è¯¯] å†…å­˜ä¸è¶³ï¼ŒTokenæ•°ç»„æ‰©å®¹å¤±è´¥\n" RESET);
                 for (size_t i = 0; i < count; i++) {
                     token_free(tokens[i]);
                 }
@@ -102,98 +134,134 @@ Token** tokenize_code(const char* source, size_t* token_count) {
                 return NULL;
             }
             tokens = new_tokens;
+            capacity = new_capacity;
         }
 
         tokens[count++] = tok;
     }
 
     *token_count = count;
-    printf("  ? ¹²Ê¶±ğ %zu ¸öToken\n", count);
     return tokens;
 }
 
 /**
- * ´¦Àíµ¥¸ö´úÂëÎÄ¼ş£ºÔ´´úÂë ¡ú Token ¡ú AST ¡ú ĞòÁĞ»¯
- * @param filename ÎÄ¼şÃû£¨ÓÃÓÚÏÔÊ¾£©
- * @param source Ô´´úÂë×Ö·û´®
- * @param out_vec Êä³öµÄĞòÁĞ»¯½á¹û
- * @return ³É¹¦·µ»Øtrue£¬Ê§°Ü·µ»Øfalse
+ * å¤„ç†å•ä¸ªä»£ç æ–‡ä»¶
  */
 int process_code(const char* filename, const char* source, StrVec* out_vec) {
-    printf("\n=== ´¦ÀíÎÄ¼ş: %s ===\n", filename);
+    printf("\n" BOLD WHITE "â”Œâ”€â”€ å¤„ç†æ–‡ä»¶: %s" RESET "\n", filename);
 
-    // ²½Öè1: ´Ê·¨·ÖÎö
+    // --- æ­¥éª¤ 1: è¯æ³•åˆ†æ ---
+    print_step("è¯æ³•åˆ†æ", 0); // æ˜¾ç¤º "æ­£åœ¨è¿›è¡Œ..."
+
     size_t token_count = 0;
     Token** tokens = tokenize_code(source, &token_count);
-    if (!tokens || token_count == 0) {
-        fprintf(stderr, "[´íÎó] ´Ê·¨·ÖÎöÊ§°Ü\n");
+
+    if (!tokens) {
+        if (token_count == 0 && tokens != NULL) { free(tokens); return 0; }
+        print_step("è¯æ³•åˆ†æ", -1); // æ˜¾ç¤ºå¤±è´¥
         return 0;
     }
+    // æˆåŠŸï¼Œæ›´æ–°ä¸ºå¯¹å·ï¼Œå¹¶è‡ªåŠ¨æ¢è¡Œ
+    print_step("è¯æ³•åˆ†æ", 1);
 
-    // ²½Öè2: Óï·¨·ÖÎö£¨¹¹½¨AST£©
-    printf("  [²½Öè2] Óï·¨·ÖÎöÖĞ...\n");
+    // --- æ­¥éª¤ 2: è¯­æ³•åˆ†æ ---
+    print_step("æ„å»ºè¯­æ³•æ ‘(AST)", 0);
+
     ASTNode* ast = ast_parse_tokens((Token* const*)tokens, token_count);
 
-    // ÊÍ·ÅTokenÊı×é£¨AST²»ĞèÒªËüÃÇÁË£©
+    if (!ast) {
+        print_step("æ„å»ºè¯­æ³•æ ‘(AST)", -1);
+        // æ¸…ç†èµ„æº
+        for (size_t i = 0; i < token_count; i++) token_free(tokens[i]);
+        free(tokens);
+        return 0;
+    }
+    print_step("æ„å»ºè¯­æ³•æ ‘(AST)", 1);
+
+    // --- æ­¥éª¤ 3: åºåˆ—åŒ– ---
+    print_step("ç»“æ„åºåˆ—åŒ–", 0);
+
+    sv_init(out_vec);
+    int serial_success = ast_serialize_preorder(ast, out_vec);
+
+    if (!serial_success) {
+        print_step("ç»“æ„åºåˆ—åŒ–", -1);
+        ast_free(ast);
+        for (size_t i = 0; i < token_count; i++) token_free(tokens[i]);
+        free(tokens);
+        sv_free(out_vec);
+        return 0;
+    }
+    print_step("ç»“æ„åºåˆ—åŒ–", 1);
+
+    // --- èµ„æºæ¸…ç† ---
+    // å…ˆé‡Šæ”¾AST
+    ast_free(ast);
+    // å†é‡Šæ”¾Token (å®‰å…¨)
     for (size_t i = 0; i < token_count; i++) {
         token_free(tokens[i]);
     }
     free(tokens);
 
-    if (!ast) {
-        fprintf(stderr, "[´íÎó] Óï·¨·ÖÎöÊ§°Ü\n");
-        return 0;
-    }
-    printf("  ? AST¹¹½¨³É¹¦\n");
-
-    // ²½Öè3: ASTĞòÁĞ»¯
-    printf("  [²½Öè3] ASTĞòÁĞ»¯ÖĞ...\n");
-    sv_init(out_vec);
-    if (!ast_serialize_preorder(ast, out_vec)) {
-        fprintf(stderr, "[´íÎó] ASTĞòÁĞ»¯Ê§°Ü\n");
-        ast_free(ast);
-        return 0;
-    }
-    printf("  ? ĞòÁĞ»¯Íê³É£¬Éú³É %zu ¸ö±ê¼Ç\n", out_vec->size);
-
-    // ¿ÉÑ¡£º´òÓ¡AST½á¹¹£¨µ÷ÊÔÓÃ£©
-    // printf("\n  [µ÷ÊÔ] AST½á¹¹:\n");
-    // ast_dump(ast, 2);
-
-    ast_free(ast);
+    // æ€»ç»“è¾“å‡º
+    printf("  " MAGENTA ICON_STAR " ç‰¹å¾æå–å®Œæˆ:" RESET " ç”Ÿæˆ %zu ä¸ªç‰¹å¾èŠ‚ç‚¹\n", out_vec->size);
     return 1;
 }
 
 /**
- * ±È½ÏÁ½¸ö´úÂëÎÄ¼şµÄÏàËÆ¶È
- * @param file1 µÚÒ»¸öÎÄ¼şÂ·¾¶
- * @param file2 µÚ¶ş¸öÎÄ¼şÂ·¾¶
+ * ç»˜åˆ¶ç›¸ä¼¼åº¦å¯è§†åŒ–æ¡
+ */
+void print_sim_bar(double similarity) {
+    int bars = (int)(similarity * 30); // 30æ ¼é•¿
+    printf("â•‘  å¯è§†åŒ–: [");
+    for(int i=0; i<30; i++) {
+        if(i < bars) {
+            if(similarity > 0.8) printf(RED "â–ˆ" RESET);
+            else if(similarity > 0.5) printf(YELLOW "â–ˆ" RESET);
+            else printf(GREEN "â–ˆ" RESET);
+        } else {
+            printf(WHITE "â–‘" RESET);
+        }
+    }
+    printf("]      â•‘\n");
+}
+
+/**
+ * æ¯”è¾ƒä¸¤ä¸ªä»£ç æ–‡ä»¶çš„ç›¸ä¼¼åº¦
  */
 void compare_files(const char* file1, const char* file2) {
-    printf("\n¨X¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨[\n");
-    printf("¨U      ´úÂëÏàËÆ¶È¼ì²âÏµÍ³ v1.0                 ¨U\n");
-    printf("¨^¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨a\n");
+    // 1. Banner
+    system("cls"); // æ¸…å±
+    printf(CYAN BOLD "\nâ•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n");
+    printf("â•‘             " ICON_CODE " ä»£ç ç»“æ„ç›¸ä¼¼åº¦æ£€æµ‹ç³»ç»Ÿ v2.0         â•‘\n");
+    printf("â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n" RESET);
 
-    // ¶ÁÈ¡ÎÄ¼ş
-    printf("\n[½×¶Î1] ¶ÁÈ¡Ô´ÎÄ¼ş...\n");
+    // 2. è¯»å–æ–‡ä»¶
+    printf("\n" BOLD MAGENTA "Step 1: è¯»å–æºæ–‡ä»¶" RESET "\n");
+    print_separator();
+
     char* source1 = read_file(file1);
     char* source2 = read_file(file2);
 
     if (!source1 || !source2) {
-        free(source1);
-        free(source2);
+        if(source1) free(source1);
+        if(source2) free(source2);
         return;
     }
+    printf("  " GREEN ICON_CHECK " æ–‡ä»¶è¯»å–æˆåŠŸ" RESET "\n");
+    printf("  " ICON_FILE " æ–‡ä»¶ A: %-20s " CYAN "(%zu bytes)" RESET "\n", file1, strlen(source1));
+    printf("  " ICON_FILE " æ–‡ä»¶ B: %-20s " CYAN "(%zu bytes)" RESET "\n", file2, strlen(source2));
 
-    printf("? ÎÄ¼ş¶ÁÈ¡³É¹¦\n");
-    printf("  - %s: %zu ×Ö½Ú\n", file1, strlen(source1));
-    printf("  - %s: %zu ×Ö½Ú\n", file2, strlen(source2));
-
-    // ´¦ÀíÁ½¸öÎÄ¼ş
-    printf("\n[½×¶Î2] ´úÂë½á¹¹·ÖÎö...\n");
+    // 3. å¤„ç†æ–‡ä»¶
+    printf("\n" BOLD MAGENTA "Step 2: ç»“æ„åˆ†æ & ç‰¹å¾æå–" RESET "\n");
+    print_separator();
 
     StrVec seq1, seq2;
     int success1 = process_code(file1, source1, &seq1);
+
+    // ç®€å•çš„è§†è§‰é—´éš”
+    // for(int i=0; i<100000000; i++);
+
     int success2 = process_code(file2, source2, &seq2);
 
     free(source1);
@@ -205,55 +273,68 @@ void compare_files(const char* file1, const char* file2) {
         return;
     }
 
-    // ¼ÆËãÏàËÆ¶È
-    printf("\n[½×¶Î3] ¼ÆËãÏàËÆ¶È...\n");
-    printf("  [²½Öè4] ¼ÆËã±à¼­¾àÀë...\n");
+    // 4. è®¡ç®—ç›¸ä¼¼åº¦
+    printf("\n" BOLD MAGENTA "Step 3: è®¡ç®—ç¼–è¾‘è·ç¦» (Levenshtein)" RESET "\n");
+    print_separator();
+    printf("  " ICON_ARROW " æ­£åœ¨æ¯”å¯¹ç‰¹å¾åºåˆ—...\n");
 
     size_t distance = levenshtein_strvec(&seq1, &seq2);
     double similarity = similarity_from_dist(distance, seq1.size, seq2.size);
 
-    printf("  ? ±à¼­¾àÀë: %zu\n", distance);
-    printf("  ? ĞòÁĞ³¤¶È: A=%zu, B=%zu\n", seq1.size, seq2.size);
+    // 5. ç»“æœé¢æ¿
+    printf("\n");
+    printf(WHITE "â•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—\n");
+    printf("â•‘                   " ICON_STAR "  ç›¸ä¼¼åº¦åˆ†ææŠ¥å‘Š  " ICON_STAR "                   â•‘\n");
+    printf("â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£\n" RESET);
+    printf("â•‘  æ–‡ä»¶ A: %-41s â•‘\n", file1);
+    printf("â•‘  æ–‡ä»¶ B: %-41s â•‘\n", file2);
+    printf(WHITE "â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£\n" RESET);
 
-    // Êä³ö½á¹û
-    printf("\n¨X¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨[\n");
-    printf("¨U               ÏàËÆ¶È·ÖÎö½á¹û                   ¨U\n");
-    printf("¨d¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨g\n");
-    printf("¨U  ÎÄ¼ş1: %-38s ¨U\n", file1);
-    printf("¨U  ÎÄ¼ş2: %-38s ¨U\n", file2);
-    printf("¨d¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨g\n");
-    printf("¨U  ½á¹¹ÏàËÆ¶È: %.2f%%                           ¨U\n", similarity * 100);
-    printf("¨d¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨g\n");
+    // æ ¹æ®ç›¸ä¼¼åº¦å˜è‰²
+    char color_code[10];
+    if (similarity >= 0.9) strcpy(color_code, RED BOLD);
+    else if (similarity >= 0.6) strcpy(color_code, YELLOW BOLD);
+    else strcpy(color_code, GREEN BOLD);
+
+    printf("â•‘  ç»“æ„ç›¸ä¼¼åº¦: %s%6.2f%%%s                                   â•‘\n", color_code, similarity * 100, RESET);
+    print_sim_bar(similarity);
+
+    printf(WHITE "â• â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•£\n" RESET);
 
     if (similarity >= 0.9) {
-        printf("¨U  ÅĞ¶¨: ¡¾¸ß¶ÈÏàËÆ¡¿¿ÉÄÜ´æÔÚ³­Ï®              ¨U\n");
+        printf("â•‘  åˆ¤å®š: " RED BOLD "ã€é«˜åº¦ç›¸ä¼¼ã€‘" RESET " æå¤§å¯èƒ½å­˜åœ¨æŠ„è¢­                  â•‘\n");
     } else if (similarity >= 0.6) {
-        printf("¨U  ÅĞ¶¨: ¡¾ÖĞ¶ÈÏàËÆ¡¿ĞèÈË¹¤Éó²é                ¨U\n");
+        printf("â•‘  åˆ¤å®š: " YELLOW BOLD "ã€ä¸­åº¦ç›¸ä¼¼ã€‘" RESET " å»ºè®®äººå·¥å®¡æŸ¥é€»è¾‘                  â•‘\n");
     } else if (similarity >= 0.3) {
-        printf("¨U  ÅĞ¶¨: ¡¾µÍ¶ÈÏàËÆ¡¿²¿·Ö½á¹¹ÏàÍ¬              ¨U\n");
+        printf("â•‘  åˆ¤å®š: " CYAN BOLD "ã€ä½åº¦ç›¸ä¼¼ã€‘" RESET " ä»…éƒ¨åˆ†è¯­æ³•ç»“æ„é›·åŒ                â•‘\n");
     } else {
-        printf("¨U  ÅĞ¶¨: ¡¾²»ÏàËÆ¡¿´úÂë½á¹¹²îÒì´ó              ¨U\n");
+        printf("â•‘  åˆ¤å®š: " GREEN BOLD "ã€ä¸ç›¸ä¼¼ã€‘  " RESET " ä»£ç ç»“æ„å·®å¼‚æ˜¾è‘—                  â•‘\n");
     }
 
-    printf("¨^¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨T¨a\n");
+    printf(WHITE "â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•\n" RESET);
+    printf("\n");
 
-    // ÇåÀí
+    // æ¸…ç†
     sv_free(&seq1);
     sv_free(&seq2);
 }
 
-// ========== Ö÷³ÌĞòÈë¿Ú ==========
+// ========== ä¸»ç¨‹åºå…¥å£ ==========
 
 int main(int argc, char* argv[]) {
-    // ¼ì²éÃüÁîĞĞ²ÎÊı
+    // æ£€æŸ¥å‘½ä»¤è¡Œå‚æ•°
     if (argc != 3) {
-        printf("ÓÃ·¨: %s <ÎÄ¼ş1.c> <ÎÄ¼ş2.c>\n", argv[0]);
-        printf("\nÊ¾Àı:\n");
-        printf("  %s codes/code1.c codes/code2.c\n", argv[0]);
+        printf(YELLOW "\nç”¨æ³•: %s <æ–‡ä»¶1.c> <æ–‡ä»¶2.c>\n" RESET, argv[0]);
+        printf("ç¤ºä¾‹:\n");
+        printf("  %s codes/original.c codes/copied.c\n\n", argv[0]);
         return 1;
     }
 
-    // Ö´ĞĞÏàËÆ¶È¼ì²â
+    // è®¾ç½®æ§åˆ¶å°ç¼–ç ä¸º UTF-8 (é’ˆå¯¹ Windows)
+    #ifdef _WIN32
+    system("chcp 65001 > nul");
+    #endif
+
     compare_files(argv[1], argv[2]);
 
     return 0;
