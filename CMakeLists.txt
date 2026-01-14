@@ -23,17 +23,36 @@ else()
     target_compile_options(core PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# ========== 1) AST 验证程序（入口 src/main.c） ==========
+# ========== Tokenizer 库（从上层目录引入） ==========
+add_library(tokenizer STATIC
+        ./src/tokenizer.c
+        ./src/std_token.c
+)
+
+# 添加上层目录到 include 路径（让 tokenizer 能找到 std_token.h）
+target_include_directories(tokenizer PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/./include
+)
+
+# ========== 1) AST 验证程序（入口 tests/test_ast.c） ==========
 add_executable(ast_demo
         tests/test_ast.c
 )
 target_link_libraries(ast_demo PRIVATE core)
 
 # ========== 2) 最终程序（入口 src/main.c） ==========
-# 为了不影响当前构建：如果文件还没放进来，就先不生成该 target
-if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/main.c")
-    add_executable(final_app
-            src/main.c
-    )
-    target_link_libraries(final_app PRIVATE core)
-endif()
+add_executable(final_app
+        src/main.c
+)
+
+# 链接所有需要的库
+target_link_libraries(final_app PRIVATE
+        core          # AST、序列化、编辑距离
+        tokenizer     # 词法分析器
+)
+
+# 添加 include 路径，让 main.c 能找到所有头文件
+target_include_directories(final_app PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include   # ast.h, ast_parser.h 等
+        ${CMAKE_CURRENT_SOURCE_DIR}/.        # tokenizer.h, std_token.h
+)
