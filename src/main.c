@@ -151,17 +151,27 @@ int process_code(const char* filename, const char* source, StrVec* out_vec) {
     printf("\n" BOLD WHITE "┌── 处理文件: %s" RESET "\n", filename);
 
     // --- 步骤 1: 词法分析 ---
-    print_step("词法分析", 0); // 显示 "正在进行..."
+    print_step("词法分析", 0);
 
     size_t token_count = 0;
     Token** tokens = tokenize_code(source, &token_count);
 
+    // 情况 1: 内存分配完全失败 (tokens 为 NULL)
     if (!tokens) {
-        if (token_count == 0 && tokens != NULL) { free(tokens); return 0; }
-        print_step("词法分析", -1); // 显示失败
+        print_step("词法分析", -1);
         return 0;
     }
-    // 成功，更新为对号，并自动换行
+
+    // 情况 2: 文件是空的 (tokens 不为 NULL，但数量为 0)
+    // [修复点] 这个检查必须在 if (!tokens) 外面
+    if (token_count == 0) {
+        printf("  " YELLOW ICON_ARROW " [警告] 文件为空或无有效代码\n" RESET);
+        print_step("词法分析", -1); // 标记为失败（因为无法进行后续步骤）
+        free(tokens); // 释放刚才分配的空数组
+        return 0;
+    }
+
+    // 成功
     print_step("词法分析", 1);
 
     // --- 步骤 2: 语法分析 ---
