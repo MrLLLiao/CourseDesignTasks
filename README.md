@@ -9,7 +9,7 @@
 
 ## 编译方法
 
-### 方法1：使用CMake（推荐）
+### 方法：使用CMake（推荐）
 
 ```bash
 cd CourseDesignTasks
@@ -17,22 +17,6 @@ mkdir build
 cd build
 cmake ..
 make
-```
-
-### 方法2：手动编译
-
-```bash
-gcc -o code_similarity \
-    src/main.c \
-    src/ast.c \
-    src/ast_parser.c \
-    src/ast_serial.c \
-    src/edit_distance.c \
-    ../tokenizer.c \
-    ../std_token.c \
-    -I../include \
-    -I.. \
-    -Wall
 ```
 
 ## 使用方法
